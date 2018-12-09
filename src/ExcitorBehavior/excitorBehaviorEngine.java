@@ -22,7 +22,7 @@ public class excitorBehaviorEngine extends PApplet {
 	int attractorCount = 3;
 	int sensorCount = 7;
 
-	float attractorForce = 0.001f;
+	float attractorForce = 0.005f;
 	boolean showExcitors = true;
 	boolean showAttractors = true;
 	boolean showActuators = true;
