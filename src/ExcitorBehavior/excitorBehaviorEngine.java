@@ -1,3 +1,12 @@
+// node makedoc.js --path "/Users/pholleman/Google Drive/_development/_GitHub/LASG-4D" --ext=.java
+// node makedoc.js --path /Users/pholleman/Desktop/temp/LASG-4D --ext=.java
+
+
+/*!
+ * \author Poul Holleman
+ */
+ 
+
 package ExcitorBehavior;
 
 import processing.core.*;
@@ -14,6 +23,7 @@ public class excitorBehaviorEngine extends PApplet {
 	NetAddress FOUR_D_ENGINE;
 	NetAddress MASTER_LAPTOP;
 	NetAddress MAX_PATCH;
+	NetAddress ENCEFALO;
 
 	int sphereUnitVertexCount = 6;
 	int attractorCount = 3;
@@ -71,6 +81,8 @@ public class excitorBehaviorEngine extends PApplet {
 		FOUR_D_ENGINE = new NetAddress("127.0.0.1", 2000);
 		MASTER_LAPTOP = new NetAddress("10.14.4.181", 3001);
 		MAX_PATCH = new NetAddress("127.0.0.1", 4000);
+		ENCEFALO = new NetAddress("127.0.0.1", 5000);
+		// ENCEFALO = new NetAddress("10.14.4.124", 5000);
 		// FOUR_D_ENGINE = new NetAddress("10.14.4.134", 2000);
 		// MASTER_LAPTOP = new NetAddress("10.14.4.163", 3001);
 
@@ -79,6 +91,13 @@ public class excitorBehaviorEngine extends PApplet {
 		sphereUnitSystem = new SphereUnitSystem();
 		attractorSystem = new AttractorSystem();
 		sensorSystem = new SensorSystem();
+		
+		/*
+		// /encefalo/excitor/[i]/position x y z
+		// /encefalo/excitor/[i]/radius f
+		// /encefalo/excitor/[i]/lifespan f
+		 
+		*/
 
 		for (int i = 0; i < attractorCount; i++) {
 			attractorSystem.addAttractor(new PVector(random(4), random(4)));
@@ -253,15 +272,17 @@ public class excitorBehaviorEngine extends PApplet {
 
 		PVector location, locationPix, velocity, acceleration, force;
 		float threshold, curvature, speedLimit, mass, lifespan;
+		int index;
 
-		Excitor(PVector _location) {
+		Excitor(int _index, PVector _location) {
+			index = _index;
 			location = _location.copy();
 			velocity = new PVector();
 			acceleration = new PVector();
 			mass = random(1);
 			threshold = 1;
 			curvature = 4;
-			speedLimit = 3;
+			speedLimit = 0.05f;
 			lifespan = 255;
 		}
 
@@ -281,6 +302,13 @@ public class excitorBehaviorEngine extends PApplet {
 			locationPix = convertVectorToPixelSpace(location);
 			acceleration.mult(0);
 			lifespan -= 0.5f;
+		}
+		
+		public void oscOut() {
+			OscMessage excitorPosition = new OscMessage("/from_EXC_BH/excitor/"+index+"/position");
+			excitorPosition.add(location.x);
+			excitorPosition.add(location.y);
+			oscar.send(excitorPosition, ENCEFALO);
 		}
 
 		public void applyAtrractorForce() {
@@ -345,6 +373,9 @@ public class excitorBehaviorEngine extends PApplet {
 			}
 		}
 	}
+	
+	
+	
 
 	class ExcitorSystem {
 
@@ -356,7 +387,7 @@ public class excitorBehaviorEngine extends PApplet {
 		}
 
 		public void addExcitor(PVector _location) {
-			excitors.add(new Excitor(_location));
+			excitors.add(new Excitor(excitors.size()+1, _location));
 		}
 
 		public void run() {
@@ -370,6 +401,9 @@ public class excitorBehaviorEngine extends PApplet {
 			}
 		}
 	}
+	
+	
+	
 
 	public void initOscIn() {
 
