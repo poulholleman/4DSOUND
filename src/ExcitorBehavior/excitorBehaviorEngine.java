@@ -16,10 +16,7 @@ public class excitorBehaviorEngine extends PApplet {
 	NetAddress MAX_PATCH;
 
 	int sphereUnitVertexCount = 6;
-	int actuatorCount = 0;
-	int excitorCount = 0;
 	int attractorCount = 3;
-	int sensorCount = 7;
 
 	float attractorForce = 0.001f;
 	boolean showExcitors = true;
@@ -33,13 +30,30 @@ public class excitorBehaviorEngine extends PApplet {
 
 	boolean gate = true;
 
-	//Sphere Unit Info: { Triad, Unit, posX, posY, posZ }
-	float sphereUnitInfo[][] = { { 1, 1, -3, 2, -0.5f }, { 1, 2, -1.5f, 2, 0.5f }, { 1, 3, -3, 2, 2 },
-			{ 2, 1, -0.5f, 2, -1.5f }, { 2, 2, 0.5f, 2, 1 }, { 2, 3, -0.5f, 2, 3 }, { 3, 1, 2, 2, -1.5f },
-			{ 3, 3, 2, 2, 3 }, { 4, 1, 4, 2, -1 }, { 4, 3, 4, 2, 2.5f }, { 5, 1, 5, 2, -0.5f },
-			{ 5, 2, 5.25f, 2, 0.5f }, { 5, 3, 5, 2, 1.5f } };
+	// Sphere Unit Info: { Triad, Unit, posX, posY, posZ }
+	float sphereUnitInfo[][] = { //
+			{ 1, 1, -3, 2, -0.5f }, //
+			{ 1, 2, -1.5f, 2, 0.5f }, //
+			{ 1, 3, -3, 2, 2 }, //
+			{ 2, 1, -0.5f, 2, -1.5f }, //
+			{ 2, 2, 0.5f, 2, 1 }, //
+			{ 2, 3, -0.5f, 2, 3 }, //
+			{ 3, 1, 2, 2, -1.5f }, //
+			{ 3, 3, 2, 2, 3 }, //
+			{ 4, 1, 4, 2, -1 }, //
+			{ 4, 3, 4, 2, 2.5f }, //
+			{ 5, 1, 5, 2, -0.5f }, //
+			{ 5, 2, 5.25f, 2, 0.5f }, //
+			{ 5, 3, 5, 2, 1.5f } //
+	};
 
-	SphereUnit[] sphereUnit = new SphereUnit[sphereUnitInfo.length];
+	// Sensor Info: { posX, posY, posZ }
+	float sensorInfo[][] = { //
+			{ 0.5f, 2, 1 }, //
+			{ -2, 2, 1 }, //
+			{ 2, 2, -1 } //
+	};
+
 	ExcitorSystem excitorSystem;
 	SensorSystem sensorSystem;
 	SphereUnitSystem sphereUnitSystem;
@@ -55,7 +69,7 @@ public class excitorBehaviorEngine extends PApplet {
 
 		oscar = new OscP5(this, 3000); // listen port
 		FOUR_D_ENGINE = new NetAddress("127.0.0.1", 2000);
-		MASTER_LAPTOP = new NetAddress("10.14.4.163", 3001);
+		MASTER_LAPTOP = new NetAddress("10.14.4.181", 3001);
 		MAX_PATCH = new NetAddress("127.0.0.1", 4000);
 		// FOUR_D_ENGINE = new NetAddress("10.14.4.134", 2000);
 		// MASTER_LAPTOP = new NetAddress("10.14.4.163", 3001);
@@ -66,17 +80,13 @@ public class excitorBehaviorEngine extends PApplet {
 		attractorSystem = new AttractorSystem();
 		sensorSystem = new SensorSystem();
 
-		sensorSystem.addSensor(new PVector(1, 1));
-		sensorSystem.addSensor(new PVector(random(2), random(2)));
-		sensorSystem.addSensor(new PVector(-1, -1));
-
-		attractorSystem.addAttractor(new PVector(2, 2));
-		attractorSystem.addAttractor(new PVector(-4, 2));
-		attractorSystem.addAttractor(new PVector(2, -3));
-
-		strokeWeight(2);
+		for (int i = 0; i < attractorCount; i++) {
+			attractorSystem.addAttractor(new PVector(random(4), random(4)));
+		}
 
 		initOscIn();
+
+		strokeWeight(2);
 	}
 
 	public void draw() {
@@ -89,10 +99,7 @@ public class excitorBehaviorEngine extends PApplet {
 		attractorSystem.run();
 		excitorSystem.run();
 		actuatorSystem.run();
-
-		for (int i = 0; i < sphereUnit.length; i++) {
-			sphereUnit[i].run();
-		}
+		sphereUnitSystem.run();
 
 		oscOut();
 		display();
@@ -119,14 +126,18 @@ public class excitorBehaviorEngine extends PApplet {
 		public void applyIntensity() {
 			if (intensity > 1)
 				intensity = 1;
-			locationPix = convertVectorToPixelSpace(location);
+
 			intensity *= masterIntensity;
 			intensity -= intensityRelease;
+
 			if (intensity < 0)
 				intensity = 0;
 		}
 
 		public void display() {
+
+			locationPix = convertVectorToPixelSpace(location);
+
 			if (showActuators) {
 				noStroke();
 				fill(intensity * 200 + 55, 150);
@@ -249,7 +260,7 @@ public class excitorBehaviorEngine extends PApplet {
 			acceleration = new PVector();
 			mass = random(1);
 			threshold = 1;
-			curvature = 1;
+			curvature = 4;
 			speedLimit = 3;
 			lifespan = 255;
 		}
@@ -284,19 +295,20 @@ public class excitorBehaviorEngine extends PApplet {
 
 		public void display() {
 			stroke(lifespan, 50);
-			noFill();
+			fill(155, 155, 0, 10 * (lifespan / 255));
 			ellipse(locationPix.x, locationPix.y, threshold * 200, threshold * 200);
-
-			textAlign(CENTER, CENTER);
-			textSize(14);
-			fill(255);
 		}
 
 		public void excite() {
 			for (int i = 0; i < actuatorSystem.actuators.size(); i++) {
 				float distance = location.dist(actuatorSystem.actuators.get(i).location);
-				if (distance <= threshold)
-					actuatorSystem.actuators.get(i).intensity += pow(1 - (distance / threshold), curvature) * 0.1f;// (lifespan/255);
+				if (distance <= threshold) {
+					float forceScalar = pow(1 - (distance / threshold), curvature) * (lifespan / 255);
+					actuatorSystem.actuators.get(i).intensity += forceScalar;
+					// forceScalar is added in order to accumulate the excitations
+					// of multiple Excitors within one Actuator
+					// TODO needs fine tuning regarding the intensity slope
+				}
 			}
 		}
 
@@ -307,14 +319,22 @@ public class excitorBehaviorEngine extends PApplet {
 		}
 
 		public void checkEdges() {
-			if (locationPix.x < -(width / 2))
+			if (locationPix.x < -(width / 2)) {
 				locationPix.x = width / 2;
-			if (locationPix.x > width / 2)
+				location.x = locationPix.x * 0.01f;
+			}
+			if (locationPix.x > width / 2) {
 				locationPix.x = -(width / 2);
-			if (locationPix.y < -(height / 2))
+				location.x = locationPix.x * 0.01f;
+			}
+			if (locationPix.y < -(height / 2)) {
 				locationPix.y = height / 2;
-			if (locationPix.y > height / 2)
+				location.y = locationPix.y * 0.01f;
+			}
+			if (locationPix.y > height / 2) {
 				locationPix.y = -(height / 2);
+				location.y = locationPix.y * 0.01f;
+			}
 		}
 
 		public boolean isDead() {
@@ -337,7 +357,6 @@ public class excitorBehaviorEngine extends PApplet {
 
 		public void addExcitor(PVector _location) {
 			excitors.add(new Excitor(_location));
-			excitorCount += 1;
 		}
 
 		public void run() {
@@ -347,7 +366,6 @@ public class excitorBehaviorEngine extends PApplet {
 				e.run();
 				if (e.isDead()) {
 					it.remove();
-					excitorCount -= 1;
 				}
 			}
 		}
@@ -430,16 +448,18 @@ public class excitorBehaviorEngine extends PApplet {
 		PVector location;
 		float intensity;
 		int fillAlpha, t;
-		int index;
+		int index, size;
 
 		Sensor(int _index, PVector _location) {
 			index = _index;
 			location = _location.copy();
 			intensity = 1;
 			fillAlpha = 0;
+			size = 30;
 		}
 
 		public void run() {
+
 			if ((millis() - t) < 100) {
 				fillAlpha = 255;
 			} else {
@@ -449,7 +469,7 @@ public class excitorBehaviorEngine extends PApplet {
 			fill(255, 0, 0, fillAlpha);
 			stroke(intensity * 200 + 50, 0, 0);
 			PVector locationPix = convertVectorToPixelSpace(location);
-			ellipse(locationPix.x, locationPix.y, 30, 30);
+			ellipse(locationPix.x, locationPix.y, size, size);
 			textAlign(CENTER, CENTER);
 			fill(255);
 			textSize(14);
@@ -460,6 +480,7 @@ public class excitorBehaviorEngine extends PApplet {
 			excitorSystem.addExcitor(location);
 			t = millis();
 		}
+
 	}
 
 	class SensorSystem {
@@ -468,11 +489,11 @@ public class excitorBehaviorEngine extends PApplet {
 
 		SensorSystem() {
 			sensors = new ArrayList<Sensor>();
-		}
 
-		public void addSensor(PVector _location) {
-			sensors.add(new Sensor(sensors.size(), _location));
-
+			for (int i = 0; i < sensorInfo.length; i++) {
+				PVector location = new PVector(sensorInfo[i][0], sensorInfo[i][2]);
+				sensors.add(new Sensor(sensors.size() + 1, location));
+			}
 		}
 
 		public void run() {
@@ -488,21 +509,21 @@ public class excitorBehaviorEngine extends PApplet {
 	class SphereUnit {
 
 		PVector location, locationPix;
-		int index;
 		String id;
 		PVector[] vertexLocations, vertexLocationsPix;
+		int vertexCount;
 		float radius;
 
-		SphereUnit(int _index, String _id, PVector _location) {
-			index = _index;
+		SphereUnit(String _id, PVector _location) {
 			id = _id;
 			location = _location;
 			radius = 0.3f;
-			vertexLocations = new PVector[sphereUnitVertexCount];
+			vertexCount = 6;
+			vertexLocations = new PVector[vertexCount];
 
-			for (int i = 0; i < sphereUnitVertexCount; i++) {
+			for (int i = 0; i < vertexCount; i++) {
 				vertexLocations[i] = new PVector();
-				vertexLocations[i] = polygonVertexPoint(sphereUnitVertexCount, radius, radius, i);
+				vertexLocations[i] = polygonVertexPoint(vertexCount, radius, radius, i);
 				vertexLocations[i].add(location);
 				actuatorSystem.addActuator(actuatorSystem.actuators.size(), vertexLocations[i]);
 			}
@@ -531,16 +552,25 @@ public class excitorBehaviorEngine extends PApplet {
 
 	class SphereUnitSystem {
 
-		PVector[] sphereUnitLocations;
+		ArrayList<SphereUnit> sphereUnits;
 
 		SphereUnitSystem() {
-			sphereUnitLocations = new PVector[sphereUnitInfo.length];
+			sphereUnits = new ArrayList<SphereUnit>();
+
 			for (int i = 0; i < sphereUnitInfo.length; i++) {
-				String id = str(PApplet.parseInt(sphereUnitInfo[i][0])) + "-"
-						+ str(PApplet.parseInt(sphereUnitInfo[i][1]));
+				String id = str((int) (sphereUnitInfo[i][0])) + "-" + str((int) (sphereUnitInfo[i][1]));
 				PVector location = new PVector(sphereUnitInfo[i][2], sphereUnitInfo[i][4]);
-				sphereUnit[i] = new SphereUnit(i, id, location);
+				sphereUnits.add(new SphereUnit(id, location));
 			}
+		}
+
+		public void run() {
+			Iterator<SphereUnit> it = sphereUnits.iterator();
+			while (it.hasNext()) {
+				SphereUnit s = it.next();
+				s.run();
+			}
+
 		}
 
 	}
@@ -558,6 +588,14 @@ public class excitorBehaviorEngine extends PApplet {
 		fill(255);
 		text("actuator count: " + actuatorSystem.actuators.size(), 30, 50);
 		text("excitor count: " + excitorSystem.excitors.size(), 30, 80);
+		text("attractor count: " + attractorSystem.attractors.size(), 30, 110);
+		text("sensor count: " + sensorSystem.sensors.size(), 30, 140);
+		text("sphere unit count: " + sphereUnitSystem.sphereUnits.size(), 30, 170);
+		
+		fill(100);
+		text("PBAI Excitor Behaviour Demo v0.1", 30, height-60);
+		text("by Poul Holleman | 4DSOUND", 30, height-30);
+
 	}
 
 	public PVector[] polygon(int _vertexCount, float _width, float _height) {
