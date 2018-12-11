@@ -1,11 +1,9 @@
 // node makedoc.js --path "/Users/pholleman/Google Drive/_development/_GitHub/LASG-4D" --ext=.java
 // node makedoc.js --path /Users/pholleman/Desktop/temp/LASG-4D --ext=.java
 
-
 /*!
  * \author Poul Holleman
  */
- 
 
 package ExcitorBehavior;
 
@@ -16,6 +14,8 @@ import peasy.*;
 import java.util.*;
 
 public class excitorBehaviorEngine extends PApplet {
+
+	String appVersion = "v0.0.4";
 
 	PeasyCam cam;
 
@@ -28,11 +28,17 @@ public class excitorBehaviorEngine extends PApplet {
 	int sphereUnitVertexCount = 6;
 	int attractorCount = 3;
 
-	float attractorForce = 0.001f;
+	float attractorForce = 0.0003f;
 	boolean showExcitors = true;
 	boolean showAttractors = true;
 	boolean showActuators = true;
 	boolean showAttractorShape = true;
+
+	boolean sendExcPosDimTo4Dengine = false;
+	boolean sendExcLifespanTo4Dengine = false;
+
+	int[] IRthresholds = { 400, 400, 400 };
+	int[] IRvalues = new int[3];
 
 	float masterIntensity = 1;
 
@@ -60,8 +66,8 @@ public class excitorBehaviorEngine extends PApplet {
 	// Sensor Info: { posX, posY, posZ }
 	float sensorInfo[][] = { //
 			{ 0.5f, 2, 1 }, //
-			{ -2, 2, 1 }, //
-			{ 2, 2, -1 } //
+			{ -2.5f, 2, 0 }, //
+			{ 4, 2, 1 } //
 	};
 
 	ExcitorSystem excitorSystem;
@@ -79,25 +85,18 @@ public class excitorBehaviorEngine extends PApplet {
 
 		oscar = new OscP5(this, 3000); // listen port
 		FOUR_D_ENGINE = new NetAddress("127.0.0.1", 2000);
-		MASTER_LAPTOP = new NetAddress("10.14.4.181", 3001);
+		MASTER_LAPTOP = new NetAddress("10.14.4.181", 3002);
 		MAX_PATCH = new NetAddress("127.0.0.1", 4000);
-		ENCEFALO = new NetAddress("127.0.0.1", 5000);
+		ENCEFALO = new NetAddress("127.0.0.1", 6000);
 		// ENCEFALO = new NetAddress("10.14.4.124", 5000);
 		// FOUR_D_ENGINE = new NetAddress("10.14.4.134", 2000);
-		// MASTER_LAPTOP = new NetAddress("10.14.4.163", 3001);
+		// MASTER_LAPTOP = new NetAddress("10.14.4.181", 3001);
 
 		actuatorSystem = new ActuatorSystem();
 		excitorSystem = new ExcitorSystem();
 		sphereUnitSystem = new SphereUnitSystem();
 		attractorSystem = new AttractorSystem();
 		sensorSystem = new SensorSystem();
-		
-		/*
-		// /encefalo/excitor/[i]/position x y z
-		// /encefalo/excitor/[i]/radius f
-		// /encefalo/excitor/[i]/lifespan f
-		 
-		*/
 
 		for (int i = 0; i < attractorCount; i++) {
 			attractorSystem.addAttractor(new PVector(random(4), random(4)));
@@ -109,6 +108,15 @@ public class excitorBehaviorEngine extends PApplet {
 	}
 
 	public void draw() {
+
+		// randomly generate Excitors for Demo Andi
+//		float chance = 0;
+//		if (frameCount % 60 == 0) {
+//			chance = random(1);
+//			if (chance < 0.25)
+//				sensorSystem.sensors.get((int) (random(3))).trigger();
+//		}
+
 		background(25);
 
 		pushMatrix();
@@ -186,11 +194,14 @@ public class excitorBehaviorEngine extends PApplet {
 		}
 
 		public void run() {
+			OscMessage actuatorIntensities = new OscMessage("/from_ExcitorBehaviour/actuatorIntensities");
 			Iterator<Actuator> it = actuators.iterator();
 			while (it.hasNext()) {
 				Actuator a = it.next();
 				a.run();
+				actuatorIntensities.add(a.intensity);
 			}
+			oscar.send(actuatorIntensities, MAX_PATCH);
 		}
 	}
 
@@ -258,7 +269,7 @@ public class excitorBehaviorEngine extends PApplet {
 				}
 
 				noStroke();
-				fill(255, 50);
+				fill(0, 255, 0, 10);
 				beginShape();
 				for (int i = 0; i < attractors.size(); i++) {
 					vertex(attractors.get(i).locationPix.x, attractors.get(i).locationPix.y);
@@ -280,10 +291,10 @@ public class excitorBehaviorEngine extends PApplet {
 			velocity = new PVector();
 			acceleration = new PVector();
 			mass = random(1);
-			threshold = 1;
+			threshold = random(2);
 			curvature = 4;
 			speedLimit = 0.05f;
-			lifespan = 255;
+			lifespan = 255f;
 		}
 
 		public void run() {
@@ -293,6 +304,7 @@ public class excitorBehaviorEngine extends PApplet {
 			checkEdges();
 			if (showExcitors)
 				display();
+			oscOut();
 		}
 
 		public void update() {
@@ -303,12 +315,41 @@ public class excitorBehaviorEngine extends PApplet {
 			acceleration.mult(0);
 			lifespan -= 0.5f;
 		}
-		
+
 		public void oscOut() {
-			OscMessage excitorPosition = new OscMessage("/from_EXC_BH/excitor/"+index+"/position");
-			excitorPosition.add(location.x);
-			excitorPosition.add(location.y);
+			OscMessage excitorPosition = new OscMessage("/from_ExcitorBehaviour/excitor/" + index + "/position");
+			excitorPosition.add(location.x); // width
+			excitorPosition.add(2); // height
+			excitorPosition.add(location.y); // depth
 			oscar.send(excitorPosition, ENCEFALO);
+
+			if (sendExcPosDimTo4Dengine) {
+				OscMessage excitorPosition4Dpos = new OscMessage("/source" + index + "/position");
+				excitorPosition4Dpos.add(location.x); // width
+				excitorPosition4Dpos.add(2); // height
+				excitorPosition4Dpos.add(location.y); // depth
+				oscar.send(excitorPosition4Dpos, FOUR_D_ENGINE);
+
+				OscMessage excitorRadius4Ddim = new OscMessage("/source" + index + "/dimensions");
+				excitorRadius4Ddim.add(threshold+1);
+				excitorRadius4Ddim.add(threshold+1);
+				excitorRadius4Ddim.add(threshold+1);
+				oscar.send(excitorRadius4Ddim, FOUR_D_ENGINE);
+			}
+
+			OscMessage excitorRadius = new OscMessage("/from_ExcitorBehaviour/excitor/" + index + "/radius");
+			excitorRadius.add(threshold);
+			oscar.send(excitorRadius, ENCEFALO);
+
+			OscMessage excitorLifespan = new OscMessage("/from_ExcitorBehaviour/excitor/" + index + "/lifespan");
+			excitorLifespan.add(lifespan);
+			oscar.send(excitorLifespan, ENCEFALO);
+
+//			if (sendExcLifespanTo4Dengine) {
+//				OscMessage excitorLifespan4Dgain = new OscMessage("/source" + index + "/gain");
+//				excitorLifespan4Dgain.add(lifespan / 255.0f);
+//				oscar.send(excitorLifespan4Dgain, FOUR_D_ENGINE);
+//			}
 		}
 
 		public void applyAtrractorForce() {
@@ -366,16 +407,13 @@ public class excitorBehaviorEngine extends PApplet {
 		}
 
 		public boolean isDead() {
-			if (lifespan < 0.0f) {
+			if (lifespan <= 0.0f) {
 				return true;
 			} else {
 				return false;
 			}
 		}
 	}
-	
-	
-	
 
 	class ExcitorSystem {
 
@@ -387,7 +425,7 @@ public class excitorBehaviorEngine extends PApplet {
 		}
 
 		public void addExcitor(PVector _location) {
-			excitors.add(new Excitor(excitors.size()+1, _location));
+			excitors.add(new Excitor(excitors.size() + 1, _location));
 		}
 
 		public void run() {
@@ -401,22 +439,32 @@ public class excitorBehaviorEngine extends PApplet {
 			}
 		}
 	}
-	
-	
-	
 
 	public void initOscIn() {
 
 		// From Max Patch
-		oscar.plug(this, "setExcitorCurvature", "/setExcitorCurvature");
-		oscar.plug(this, "setExcitorThresholds", "/setExcitorThresholds");
-		oscar.plug(this, "setExcitorMasterIntensity", "/setExcitorMasterIntensity");
-		oscar.plug(this, "setAttractorForce", "/setAttractorForce");
-		oscar.plug(this, "setAttractorLocations", "/setAttractorLocations");
+		oscar.plug(this, "generateExcitor", "/to_ExcitorBehaviour/generateExcitor");
+		oscar.plug(this, "setExcitorCurvature", "/to_ExcitorBehaviour/setExcitorCurvature");
+		oscar.plug(this, "setExcitorThresholds", "/to_ExcitorBehaviour/setExcitorThresholds");
+		oscar.plug(this, "setExcitorMasterIntensity", "/to_ExcitorBehaviour/setExcitorMasterIntensity");
+		oscar.plug(this, "setAttractorForce", "/to_ExcitorBehaviour/setAttractorForce");
+		oscar.plug(this, "setAttractorLocations", "/to_ExcitorBehaviour/setAttractorLocations");
+		oscar.plug(this, "IR1thres", "/to_ExcitorBehaviour/sensor/1/setThreshold");
+		oscar.plug(this, "IR2thres", "/to_ExcitorBehaviour/sensor/2/setThreshold");
+		oscar.plug(this, "IR3thres", "/to_ExcitorBehaviour/sensor/3/setThreshold");
 
 		// From Sensors
-		oscar.plug(this, "IRvalueCentre", "/4D/SENSOR/CENTRE");
-		oscar.plug(this, "IRvalueCorner", "/4D/SENSOR/CORNER");
+		oscar.plug(this, "IR1val", "/to_ExcitorBehaviour/sensor/1/value");
+		oscar.plug(this, "IR2val", "/to_ExcitorBehaviour/sensor/2/value");
+		oscar.plug(this, "IR3val", "/to_ExcitorBehaviour/sensor/3/value");
+
+	}
+
+	public void generateExcitor(int v) {
+		// For some reason generating Excitors thru OSC at a fast pace (<1000ms) crashes
+		// the app. Similar code with key press input (ref keyPressed()) does not crash
+		// the app.
+		sensorSystem.sensors.get(v - 1).trigger();
 	}
 
 	public void setExcitorCurvature(float v) {
@@ -439,23 +487,57 @@ public class excitorBehaviorEngine extends PApplet {
 		attractorForce = v;
 	}
 
-	public void setAttractorLocations(int[] locations) {
+	public void setAttractorLocations(float[] locations) {
 		for (int i = 0; i < attractorSystem.attractors.size(); i++) {
-			attractorSystem.attractors.get(i).location.x = locations[i * 2] * 100;
-			attractorSystem.attractors.get(i).location.y = (locations[i * 2] + 1) * 100;
+			attractorSystem.attractors.get(i).location.x = locations[i * 2];
+			attractorSystem.attractors.get(i).location.y = locations[i * 2 + 1];
 		}
 	}
 
-//	public void IRvalueCorner(int v) {
-//		println("IRvalueCorner: " + v);
-//		if (v > 400) {
-//			if (gate)
-//				sensor[2].trigger();
-//			gate = false;
-//		} else {
-//			gate = true;
-//		}
-//	}
+	public void IR1val(int v) {
+		IRvalues[0] = v;
+		if (v > IRthresholds[0]) {
+			if (gate)
+				sensorSystem.sensors.get(0).trigger();
+			gate = false;
+		} else {
+			gate = true;
+		}
+	}
+
+	public void IR2val(int v) {
+		IRvalues[1] = v;
+		if (v > IRthresholds[1]) {
+			if (gate)
+				sensorSystem.sensors.get(1).trigger();
+			gate = false;
+		} else {
+			gate = true;
+		}
+	}
+
+	public void IR3val(int v) {
+		IRvalues[2] = v;
+		if (v > IRthresholds[2]) {
+			if (gate)
+				sensorSystem.sensors.get(2).trigger();
+			gate = false;
+		} else {
+			gate = true;
+		}
+	}
+
+	public void IR1thres(int v) {
+		IRthresholds[0] = v;
+	}
+
+	public void IR2thres(int v) {
+		IRthresholds[1] = v;
+	}
+
+	public void IR3thres(int v) {
+		IRthresholds[2] = v;
+	}
 
 	public void oscOut() {
 		OscMessage unitActuatorIntensities = new OscMessage("/4D/TRIAD1/UNIT1/INTENSITIES");
@@ -469,7 +551,7 @@ public class excitorBehaviorEngine extends PApplet {
 						"/4D/TRIAD" + triadIndex + "/UNIT" + unitIndex + "/INTENSITIES");
 			}
 
-			unitActuatorIntensities.add(PApplet.parseInt(actuatorSystem.actuators.get(i).intensity * 255));
+			unitActuatorIntensities.add(PApplet.parseInt(actuatorSystem.actuators.get(i).intensity * 150));
 
 			if (i % sphereUnitVertexCount == sphereUnitVertexCount - 1) {
 				oscar.send(unitActuatorIntensities, MASTER_LAPTOP);
@@ -505,9 +587,11 @@ public class excitorBehaviorEngine extends PApplet {
 			PVector locationPix = convertVectorToPixelSpace(location);
 			ellipse(locationPix.x, locationPix.y, size, size);
 			textAlign(CENTER, CENTER);
-			fill(255);
+			fill(255, 0, 0);
 			textSize(14);
-			text(index, locationPix.x, locationPix.y);
+			text(index + 1, locationPix.x, locationPix.y - 4);
+			textSize(12);
+			text("val " + IRvalues[index], locationPix.x, locationPix.y + 20);
 		}
 
 		public void trigger() {
@@ -526,7 +610,7 @@ public class excitorBehaviorEngine extends PApplet {
 
 			for (int i = 0; i < sensorInfo.length; i++) {
 				PVector location = new PVector(sensorInfo[i][0], sensorInfo[i][2]);
-				sensors.add(new Sensor(sensors.size() + 1, location));
+				sensors.add(new Sensor(sensors.size(), location));
 			}
 		}
 
@@ -620,33 +704,38 @@ public class excitorBehaviorEngine extends PApplet {
 		}
 
 		fill(255);
-		text("actuator count: " + actuatorSystem.actuators.size(), 30, 50);
-		text("excitor count: " + excitorSystem.excitors.size(), 30, 80);
-		text("attractor count: " + attractorSystem.attractors.size(), 30, 110);
-		text("sensor count: " + sensorSystem.sensors.size(), 30, 140);
-		text("sphere unit count: " + sphereUnitSystem.sphereUnits.size(), 30, 170);
-		
+		text("sphere unit count: " + sphereUnitSystem.sphereUnits.size(), 30, 50);
+		text("actuator count: " + actuatorSystem.actuators.size(), 30, 80);
+		text("excitor count: " + excitorSystem.excitors.size(), 30, 110);
+		text("attractor count: " + attractorSystem.attractors.size(), 30, 140);
+		text("sensor count: " + sensorSystem.sensors.size(), 30, 170);
+
+		text("excitor pos/radius to 4D pos/dim (key 'p'): " + sendExcPosDimTo4Dengine, 30, 240);
+		text("excitor lifespan to 4D gain/scale (key 'l'): " + sendExcLifespanTo4Dengine, 30, 270);
+
+		text("generate Excitors at Sensor locations (keys '1' '2' '3')", 30, 330);
+		text("show/hide Excitors (key 'e')", 30, 360);
+		text("generate random Attractor locations (key 'r')", 30, 390);
+		text("show/hide Attractor field (key 's')", 30, 420);
+
+		text("OSC", 30, 480);
+		text("listen port: 3000", 30, 510);
+		text("to 4DSOUND: 127.0.0.1 2000", 30, 540);
+		text("to Master Laptop: 10.14.4.181 3001", 30, 570);
+		text("to Max Patch: 127.0.0.1 4000", 30, 600);
+		text("to Encefalo: 127.0.0.1 6000", 30, 630);
+
 		fill(100);
-		text("PBAI Excitor Behaviour Demo v0.1", 30, height-60);
-		text("by Poul Holleman | 4DSOUND", 30, height-30);
+		text("LASG Excitor Behaviour Demo " + appVersion, 30, height - 60);
+		text("by Poul Holleman | 4DSOUND", 30, height - 30);
 
-	}
-
-	public PVector[] polygon(int _vertexCount, float _width, float _height) {
-		PVector[] vertices = new PVector[_vertexCount];
-		for (int i = 0; i < _vertexCount; i++) {
-			vertices[i] = new PVector();
-			vertices[i].x = sin(TWO_PI / _vertexCount * i + PI) * _width;
-			vertices[i].y = cos(TWO_PI / _vertexCount * i + PI) * _height;
-		}
-		return vertices;
 	}
 
 	public PVector polygonVertexPoint(int _vertexCount, float _width, float _height, int _index) {
 		PVector vertex = new PVector();
 		;
-		vertex.x = sin(TWO_PI / _vertexCount * _index + PI) * _width;
-		vertex.y = cos(TWO_PI / _vertexCount * _index + PI) * _height;
+		vertex.x = sin(TWO_PI / _vertexCount * -_index + PI) * _width; // multiplied by minus-index for CW arrangement
+		vertex.y = cos(TWO_PI / _vertexCount * -_index + PI) * _height;
 		return vertex;
 	}
 
@@ -707,6 +796,22 @@ public class excitorBehaviorEngine extends PApplet {
 				showAttractorShape = false;
 			} else {
 				showAttractorShape = true;
+			}
+		}
+
+		if (key == 'p') {
+			if (sendExcPosDimTo4Dengine) {
+				sendExcPosDimTo4Dengine = false;
+			} else {
+				sendExcPosDimTo4Dengine = true;
+			}
+		}
+
+		if (key == 'l') {
+			if (sendExcLifespanTo4Dengine) {
+				sendExcLifespanTo4Dengine = false;
+			} else {
+				sendExcLifespanTo4Dengine = true;
 			}
 		}
 
